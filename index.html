@@ -112,7 +112,7 @@
 <body>
     <div class="chat-container">
         <div class="chat-box" id="chatBox">
-            <div class="message bot-message">مرحبًا! أنا بوت الدعم الفني. إزاي أقدر أساعدك؟</div>
+            <div class="message bot-message">مرحبًا! أنا بوت الدعم الفني لنظام الدوة المستندية الإلكترونية. إزاي أقدر أساعدك؟</div>
         </div>
         <div class="input-container">
             <input type="text" id="userInput" placeholder="اكتب سؤالك هنا...">
@@ -154,7 +154,7 @@
             chatBox.appendChild(userMessage);
 
             // البحث عن رد باستخدام Fuse.js
-            let botReply = 'مش فاهم سؤالك! 😅 ممكن توضح أكتر؟';
+            let botReply = 'مش فاهم سؤالك! 😅 ممكن توضح السؤال أكتر؟';
             if (fuse) {
                 const results = fuse.search(userInput);
                 if (results.length > 0) {
