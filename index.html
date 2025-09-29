@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوت الدعم الفني مع PDF</title>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/natural@5.2.4/lib/natural.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .chat-container {
+            width: 300px;
+            height: 400px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-box {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            border-bottom: 1px solid #ddd;
+        }
+        .message {
+            margin: 5px;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            text-align: left;
+            margin-left: 20%;
+        }
+        .bot-message {
+            background-color: #e9ecef;
+            text-align: right;
+            margin-right: 20%;
+        }
+        .input-container {
+            display: flex;
+            padding: 10px;
+            flex-direction: column;
+            gap: 10px;
+        }
+        input[type="text"], input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-box" id="chatBox">
+            <div class="message bot-message">مرحبًا! ارفع ملف PDF أو اكتب سؤالك.</div>
+        </div>
+        <div class="input-container">
+            <input type="file" id="pdfInput" accept=".pdf" onchange="loadPDF()">
+            <input type="text" id="userInput" placeholder="اكتب سؤالك هنا...">
+            <button onclick="sendMessage()">إرسال</button>
+        </div>
+    </div>
+
+    <script>
+        let pdfText = [];
+        let tokenizer = new natural.WordTokenizer();
+        let stemmer = natural.PorterStemmer;
+
+        // تقسيم النصوص إلى جمل
+        function splitIntoSentences(text) {
+            return text.split(/[.!?]/).filter(sentence => sentence.trim().length > 0);
+        }
+
+        // استخراج النصوص من الـ PDF
+        async function loadPDF() {
+            const fileInput = document.getElementById('pdfInput');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const typedArray = new Uint8Array(e.target.result);
+                const pdf = await pdfjsLib.getDocument(typedArray).promise;
+                pdfText = [];
+
+                // استخراج النصوص من كل صفحة
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    const sentences = splitIntoSentences(pageText);
+                    sentences.forEach(sentence => {
+                        pdfText.push({ content: sentence.trim() });
+                    });
+                }
+
+                // رسالة تأكيد
+                const chatBox = document.getElementById('chatBox');
+                const botMessage = document.createElement('div');
+                botMessage.className = 'message bot-message';
+                botMessage.textContent = 'تم تحميل الـ PDF! اسألني أي سؤال.';
+                chatBox.appendChild(botMessage);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // حساب التشابه بين جملتين
+        function getSimilarity(text1, text2) {
+            const tokens1 = tokenizer.tokenize(text1);
+            const tokens2 = tokenizer.tokenize(text2);
+            const stemmed1 = tokens1.map(word => stemmer.stem(word));
+            const stemmed2 = tokens2.map(word => stemmer.stem(word));
+            return natural.JaroWinklerDistance(text1, text2); // مقياس التشابه
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput').value.trim();
+            if (!userInput) return;
+
+            // إضافة رسالة المستخدم
+            const chatBox = document.getElementById('chatBox');
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user-message';
+            userMessage.textContent = userInput;
+            chatBox.appendChild(userMessage);
+
+            // البحث في النصوص
+            let botReply = 'مش فاهم سؤالك! 😅 حاول تكتب السؤال بطريقة تانية أو ارفع ملف PDF جديد.';
+            if (pdfText.length > 0) {
+                let bestMatch = { content: '', score: 0 };
+                pdfText.forEach(item => {
+                    const similarity = getSimilarity(userInput, item.content);
+                    if (similarity > bestMatch.score && similarity > 0.7) {
+                        bestMatch = { content: item.content, score: similarity };
+                    }
+                });
+                if (bestMatch.score > 0) {
+                    botReply = bestMatch.content;
+                }
+            }
+
+            // إضافة رد البوت
+            const botMessage = document.createElement('div');
+            botMessage.className = 'message bot-message';
+            botMessage.textContent = botReply;
+            chatBox.appendChild(botMessage);
+
+            // تنظيف حقل الإدخال
+            document.getElementById('userInput').value = '';
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Enter للإرسال
+        document.getElementById('userInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
